@@ -8,6 +8,7 @@ build/
 # Credentials and tokens
 credentials.json
 token.json
+ms_token_cache.json
 *.pem
 *.key
 

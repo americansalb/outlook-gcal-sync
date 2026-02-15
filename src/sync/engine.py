@@ -11,7 +11,8 @@ from src.google_cal.client import (
     unified_to_google_body,
 )
 from src.outlook.event_reader import read_outlook_events
-from src.outlook.event_writer import create_event, delete_event, update_event
+from src.outlook.event_writer import create_event, delete_event, set_graph_client, update_event
+from src.outlook.graph_client import GraphCalendarClient
 from src.sync.conflict import resolve_conflict
 from src.sync.matcher import match_by_sync_pairs
 from src.sync.models import SyncAction, SyncPair, UnifiedEvent
@@ -28,16 +29,22 @@ class SyncEngine:
         config: dict,
         google_client: GoogleCalendarClient,
         state_store: SyncStateStore,
+        graph_client: GraphCalendarClient | None = None,
     ):
         self.config = config
         self.google = google_client
         self.state = state_store
+        self.graph_client = graph_client
         self.sync_config = config["sync"]
         self.outlook_calendar = config["outlook"]["calendar_name"]
         self.dry_run = self.sync_config.get("dry_run", False)
         self.direction = self.sync_config.get("direction", "both")
         self.conflict_strategy = self.sync_config.get("conflict_resolution", "outlook-wins")
         self.exclude_patterns = self.sync_config.get("exclude_patterns", [])
+
+        # Wire up the Graph client for the event writer module
+        if graph_client:
+            set_graph_client(graph_client, self.outlook_calendar)
 
     def run(self) -> dict:
         """Execute a full sync cycle. Returns a summary dict."""
@@ -92,11 +99,12 @@ class SyncEngine:
         return summary
 
     def _fetch_outlook(self) -> list[UnifiedEvent]:
-        """Fetch events from Outlook via AppleScript."""
+        """Fetch events from Outlook via Microsoft Graph API."""
         return read_outlook_events(
             calendar_name=self.outlook_calendar,
             days_back=self.sync_config["days_back"],
             days_forward=self.sync_config["days_forward"],
+            graph_client=self.graph_client,
         )
 
     def _fetch_google(self) -> tuple[list[dict], str | None]:

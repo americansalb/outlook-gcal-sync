@@ -1,6 +1,12 @@
 outlook:
   calendar_name: "Calendar"    # Name of the Outlook calendar to sync
 
+microsoft:
+  client_id: ""                # Azure AD Application (client) ID
+  tenant_id: "common"          # Azure AD tenant ID (or "common" for multi-tenant)
+  calendar_id: ""              # Graph calendar ID (empty = default calendar)
+  token_cache_path: "~/.config/outlook-gcal-sync/ms_token_cache.json"
+
 google:
   calendar_id: "primary"       # Google Calendar ID (use "primary" for main calendar)
   credentials_path: "~/.config/outlook-gcal-sync/credentials.json"

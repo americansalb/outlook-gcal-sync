@@ -8,6 +8,26 @@ from src.config import load_config, ensure_config_dir
 from src.utils.logging_config import setup_logging
 
 
+def _get_graph_client(config: dict):
+    """Build an authenticated GraphCalendarClient from config."""
+    from src.outlook.graph_auth import get_graph_token
+    from src.outlook.graph_client import GraphCalendarClient
+
+    ms_config = config.get("microsoft", {})
+    client_id = ms_config.get("client_id", "")
+    if not client_id:
+        print("\nError: Microsoft client_id not configured.")
+        print("Run 'outlook-gcal-sync setup-microsoft' first.")
+        sys.exit(1)
+
+    token = get_graph_token(
+        client_id=client_id,
+        tenant_id=ms_config.get("tenant_id", "common"),
+        cache_path=ms_config.get("token_cache_path", ""),
+    )
+    return GraphCalendarClient(token)
+
+
 def cmd_setup(config: dict) -> None:
     """Interactive Google OAuth setup."""
     from src.google_cal.auth import build_calendar_service
@@ -44,22 +64,77 @@ def cmd_setup(config: dict) -> None:
         sys.exit(1)
 
 
-def cmd_list_calendars(config: dict) -> None:
-    """List available Outlook calendars."""
-    from src.outlook.applescript_bridge import check_outlook_running, list_calendars
+def cmd_setup_microsoft(config: dict) -> None:
+    """Interactive Microsoft Graph OAuth setup."""
+    from src.outlook.graph_auth import get_graph_token
+    from src.outlook.graph_client import GraphCalendarClient
 
-    if not check_outlook_running():
-        print("Error: Microsoft Outlook is not running. Please launch it first.")
+    ms_config = config.get("microsoft", {})
+    client_id = ms_config.get("client_id", "")
+
+    if not client_id:
+        print("Microsoft Graph setup requires an Azure AD app registration.\n")
+        print("Steps to register your app:")
+        print("1. Go to https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade")
+        print("2. Click 'New registration'")
+        print("3. Name: 'Outlook Calendar Sync' (or anything you like)")
+        print("4. Supported account types: 'Accounts in this organizational directory only'")
+        print("5. Redirect URI: Leave blank (we use device code flow)")
+        print("6. Click 'Register'")
+        print("7. Copy the 'Application (client) ID' from the overview page")
+        print("8. Go to 'Authentication' → enable 'Allow public client flows' → Save")
+        print("9. Go to 'API permissions' → Add: Microsoft Graph → Delegated → Calendars.ReadWrite")
+        print("")
+        print("Then add the client_id to your config file:")
+        print(f"  {config.get('_config_path', '~/.config/outlook-gcal-sync/config.yaml')}")
+        print("")
+        print("  microsoft:")
+        print("    client_id: \"YOUR-CLIENT-ID-HERE\"")
+        print("")
         sys.exit(1)
 
-    calendars = list_calendars()
+    print("Setting up Microsoft Graph authentication...")
+    print("(Device code flow — a browser window will need to be opened)\n")
+
+    try:
+        token = get_graph_token(
+            client_id=client_id,
+            tenant_id=ms_config.get("tenant_id", "common"),
+            cache_path=ms_config.get("token_cache_path", ""),
+        )
+
+        # Verify by listing calendars
+        client = GraphCalendarClient(token)
+        calendars = client.list_calendars()
+
+        print(f"\nSuccess! Connected to Microsoft Graph.")
+        print(f"Found {len(calendars)} calendar(s):")
+        for cal in calendars:
+            default = " (default)" if cal.get("isDefaultCalendar") else ""
+            owner = cal.get("owner", {}).get("address", "")
+            print(f"  - {cal['name']}{default} [{owner}]")
+        print(f"\nToken cached to: {ms_config.get('token_cache_path', '(default)')}")
+
+    except Exception as e:
+        print(f"\nError during Microsoft setup: {e}")
+        sys.exit(1)
+
+
+def cmd_list_calendars(config: dict) -> None:
+    """List available Outlook calendars via Microsoft Graph."""
+    client = _get_graph_client(config)
+    calendars = client.list_calendars()
+
     if not calendars:
-        print("No calendars found in Outlook.")
+        print("No calendars found in Microsoft account.")
         sys.exit(1)
 
     print(f"Found {len(calendars)} calendar(s) in Outlook:\n")
-    for i, name in enumerate(calendars, 1):
-        print(f"  {i}. {name}")
+    for i, cal in enumerate(calendars, 1):
+        default = " (default)" if cal.get("isDefaultCalendar") else ""
+        owner = cal.get("owner", {}).get("address", "")
+        print(f"  {i}. {cal['name']}{default} [{owner}]")
+
     print(f"\nCurrent config uses: '{config['outlook']['calendar_name']}'")
 
 
@@ -67,21 +142,18 @@ def cmd_sync(config: dict, dry_run: bool = False) -> None:
     """Run the sync engine."""
     from src.google_cal.auth import build_calendar_service
     from src.google_cal.client import GoogleCalendarClient
-    from src.outlook.applescript_bridge import check_outlook_running
     from src.sync.engine import SyncEngine
     from src.sync.state import SyncStateStore
 
     logger = logging.getLogger("outlook_gcal_sync")
 
-    # Pre-checks
-    if not check_outlook_running():
-        logger.error("Microsoft Outlook is not running. Please launch it first.")
-        sys.exit(1)
-
     if dry_run:
         config["sync"]["dry_run"] = True
 
-    # Initialize components
+    # Initialize Microsoft Graph client
+    graph_client = _get_graph_client(config)
+
+    # Initialize Google client
     try:
         service = build_calendar_service(
             config["google"]["credentials_path"],
@@ -97,7 +169,7 @@ def cmd_sync(config: dict, dry_run: bool = False) -> None:
     state_store = SyncStateStore(config["state"]["db_path"])
 
     try:
-        engine = SyncEngine(config, google_client, state_store)
+        engine = SyncEngine(config, google_client, state_store, graph_client=graph_client)
         summary = engine.run()
 
         if dry_run:
@@ -167,7 +239,7 @@ def cmd_reset(config: dict) -> None:
 def main():
     parser = argparse.ArgumentParser(
         prog="outlook-gcal-sync",
-        description="Bidirectional sync between Outlook for Mac and Google Calendar",
+        description="Bidirectional sync between Outlook and Google Calendar",
     )
     parser.add_argument(
         "-c", "--config",
@@ -176,8 +248,12 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # setup
+    # setup (Google)
     subparsers.add_parser("setup", help="Set up Google Calendar authentication")
+    subparsers.add_parser("setup-google", help="Set up Google Calendar authentication")
+
+    # setup-microsoft
+    subparsers.add_parser("setup-microsoft", help="Set up Microsoft Graph authentication")
 
     # sync
     sync_parser = subparsers.add_parser("sync", help="Run calendar sync")
@@ -204,7 +280,7 @@ def main():
         sys.exit(1)
 
     # Load config
-    config = load_config(args.command != "setup" and args.config or args.config)
+    config = load_config(args.command not in ("setup", "setup-google", "setup-microsoft") and args.config or args.config)
     ensure_config_dir(config)
     setup_logging(config)
 
@@ -213,8 +289,10 @@ def main():
         config["sync"]["direction"] = args.direction
 
     # Dispatch
-    if args.command == "setup":
+    if args.command in ("setup", "setup-google"):
         cmd_setup(config)
+    elif args.command == "setup-microsoft":
+        cmd_setup_microsoft(config)
     elif args.command == "sync":
         cmd_sync(config, dry_run=args.dry_run)
     elif args.command == "status":

@@ -12,6 +12,12 @@ DEFAULT_CONFIG = {
     "outlook": {
         "calendar_name": "Calendar",
     },
+    "microsoft": {
+        "client_id": "",
+        "tenant_id": "common",
+        "calendar_id": "",
+        "token_cache_path": "~/.config/outlook-gcal-sync/ms_token_cache.json",
+    },
     "google": {
         "calendar_id": "primary",
         "credentials_path": "~/.config/outlook-gcal-sync/credentials.json",
