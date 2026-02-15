@@ -1,0 +1,28 @@
+outlook:
+  calendar_name: "Calendar"    # Name of the Outlook calendar to sync
+
+google:
+  calendar_id: "primary"       # Google Calendar ID (use "primary" for main calendar)
+  credentials_path: "~/.config/outlook-gcal-sync/credentials.json"
+  token_path: "~/.config/outlook-gcal-sync/token.json"
+
+sync:
+  direction: "both"            # both | outlook-to-google | google-to-outlook
+  days_back: 30                # How far back to sync
+  days_forward: 90             # How far forward to sync
+  conflict_resolution: "outlook-wins"  # outlook-wins | google-wins | newest
+  dry_run: false
+
+  # Skip events matching these title patterns (shell-style globs)
+  exclude_patterns: []
+  #  - "Canceled:*"
+  #  - "HOLD:*"
+
+state:
+  db_path: "~/.config/outlook-gcal-sync/sync_state.db"
+
+logging:
+  level: "INFO"
+  file: "~/.config/outlook-gcal-sync/sync.log"
+  max_bytes: 5242880           # 5MB
+  backup_count: 3

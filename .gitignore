@@ -1,0 +1,40 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Credentials and tokens
+credentials.json
+token.json
+*.pem
+*.key
+
+# Config with secrets
+config.yaml
+
+# Sync state
+sync_state.db
+sync_state.db-journal
+sync_state.db-wal
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Claude
+.claude/

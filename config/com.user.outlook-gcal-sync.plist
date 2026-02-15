@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.outlook-gcal-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>PYTHON_PATH_HERE</string>
+        <string>-m</string>
+        <string>src.cli</string>
+        <string>sync</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>PROJECT_PATH_HERE</string>
+
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>StandardOutPath</key>
+    <string>LOG_PATH_HERE/launchd_stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>LOG_PATH_HERE/launchd_stderr.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>Nice</key>
+    <integer>10</integer>
+</dict>
+</plist>
