@@ -1,5 +1,7 @@
 """Create, update, and delete calendar events in Outlook via Microsoft Graph API."""
 
+from __future__ import annotations
+
 import logging
 
 from src.outlook.graph_client import GraphCalendarClient, unified_to_graph_body

@@ -1,9 +1,12 @@
 """Microsoft Graph Calendar API client using raw REST calls."""
 
+from __future__ import annotations
+
 import logging
 import re
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -191,8 +194,6 @@ def graph_event_to_unified(event: dict) -> UnifiedEvent:
     Returns:
         A UnifiedEvent with source="outlook".
     """
-    from zoneinfo import ZoneInfo
-
     is_all_day = event.get("isAllDay", False)
     start_raw = event.get("start", {})
     end_raw = event.get("end", {})
@@ -325,8 +326,6 @@ _WINDOWS_TO_IANA = {
 
 def _resolve_timezone(tz_name: str | None) -> ZoneInfo:
     """Resolve a timezone name (Windows or IANA) to a ZoneInfo object."""
-    from zoneinfo import ZoneInfo
-
     if not tz_name:
         return get_local_timezone()
 
@@ -350,8 +349,6 @@ def _parse_graph_datetime(dt_dict: dict) -> datetime:
 
     Graph format: {"dateTime": "2026-02-14T09:00:00.0000000", "timeZone": "Eastern Standard Time"}
     """
-    from zoneinfo import ZoneInfo
-
     dt_str = dt_dict.get("dateTime", "")
     tz_name = dt_dict.get("timeZone")
 
