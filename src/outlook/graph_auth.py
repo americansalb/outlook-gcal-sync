@@ -5,10 +5,42 @@ import os
 from pathlib import Path
 
 import msal
+import requests as req_lib
 
 logger = logging.getLogger("outlook_gcal_sync.microsoft.auth")
 
 SCOPES = ["Calendars.ReadWrite", "User.Read"]
+
+
+def _build_http_client() -> req_lib.Session:
+    """Build a requests Session that honours corporate CA bundles.
+
+    Checks (in order):
+      1. REQUESTS_CA_BUNDLE env var
+      2. CURL_CA_BUNDLE env var
+      3. SSL_CERT_FILE env var
+      4. /tmp/corp_certs.pem (common location for extracted corporate certs)
+    Falls back to default verification if none found.
+    """
+    session = req_lib.Session()
+
+    ca_bundle = (
+        os.environ.get("REQUESTS_CA_BUNDLE")
+        or os.environ.get("CURL_CA_BUNDLE")
+        or os.environ.get("SSL_CERT_FILE")
+    )
+
+    # Fallback: check common location for corporate certs
+    if not ca_bundle and os.path.exists("/tmp/corp_certs.pem"):
+        ca_bundle = "/tmp/corp_certs.pem"
+
+    if ca_bundle and os.path.exists(ca_bundle):
+        session.verify = ca_bundle
+        logger.info("Using custom CA bundle for MSAL: %s", ca_bundle)
+    else:
+        logger.debug("No custom CA bundle found, using default SSL verification.")
+
+    return session
 
 
 def _build_app(client_id: str, tenant_id: str, cache_path: str) -> msal.PublicClientApplication:
@@ -20,10 +52,15 @@ def _build_app(client_id: str, tenant_id: str, cache_path: str) -> msal.PublicCl
             cache.deserialize(f.read())
         logger.debug("Loaded MSAL token cache from %s", cache_path)
 
+    # Pass custom HTTP client so MSAL uses the corporate CA bundle
+    # for its OpenID Connect discovery and token endpoint calls.
+    http_client = _build_http_client()
+
     app = msal.PublicClientApplication(
         client_id,
         authority=f"https://login.microsoftonline.com/{tenant_id}",
         token_cache=cache,
+        http_client=http_client,
     )
     return app
 

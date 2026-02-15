@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
@@ -50,6 +51,17 @@ class GraphCalendarClient:
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
         })
+
+        # Honour corporate CA bundles for SSL verification
+        ca_bundle = (
+            os.environ.get("REQUESTS_CA_BUNDLE")
+            or os.environ.get("CURL_CA_BUNDLE")
+            or os.environ.get("SSL_CERT_FILE")
+        )
+        if not ca_bundle and os.path.exists("/tmp/corp_certs.pem"):
+            ca_bundle = "/tmp/corp_certs.pem"
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.session.verify = ca_bundle
 
     def _get(self, url: str, params: dict | None = None) -> dict:
         resp = self.session.get(url, params=params)
