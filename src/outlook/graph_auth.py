@@ -1,6 +1,5 @@
-"""Microsoft Graph OAuth2 authentication via MSAL device code flow."""
+"""Microsoft Graph OAuth2 authentication via MSAL interactive browser flow."""
 
-import json
 import logging
 import os
 from pathlib import Path
@@ -43,7 +42,9 @@ def get_graph_token(client_id: str, tenant_id: str, cache_path: str) -> str:
     """Get a valid Microsoft Graph access token.
 
     Attempts silent token acquisition first (cached/refresh token).
-    Falls back to device code flow if no valid token exists.
+    Falls back to interactive browser-based OAuth flow if no valid token exists.
+    This uses the authorization code flow (same as Graph Explorer), which works
+    even when corporate tenants block device code flow.
 
     Args:
         client_id: Azure AD application (client) ID.
@@ -68,17 +69,13 @@ def get_graph_token(client_id: str, tenant_id: str, cache_path: str) -> str:
             _save_cache(app, cache_path)
             return result["access_token"]
 
-    # Fall back to device code flow
-    logger.info("Starting Microsoft device code authentication flow...")
-    flow = app.initiate_device_flow(scopes=SCOPES)
-    if "user_code" not in flow:
-        raise RuntimeError(f"Failed to initiate device flow: {flow.get('error_description', 'Unknown error')}")
+    # Fall back to interactive browser-based OAuth (like Graph Explorer)
+    logger.info("Starting interactive Microsoft browser authentication...")
+    print("\nOpening your browser for Microsoft sign-in...")
+    print("(If the browser doesn't open automatically, check your taskbar)\n")
 
-    print(f"\nTo sign in, open a browser to: {flow['verification_uri']}")
-    print(f"Enter this code: {flow['user_code']}\n")
-    print("Waiting for authentication...")
+    result = app.acquire_token_interactive(scopes=SCOPES)
 
-    result = app.acquire_token_by_device_flow(flow)
     if "access_token" not in result:
         error = result.get("error_description", result.get("error", "Unknown error"))
         raise RuntimeError(f"Microsoft authentication failed: {error}")
